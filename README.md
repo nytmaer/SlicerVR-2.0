@@ -33,4 +33,18 @@
 
 ## License
 
-GPL v2.0 - See [LICENSE](LICENSE) file.
+# SlicerVR-2.0
+
+SlicerVR-2.0 is a VR-focused toolset and experimental development project by Master Nytmaer / Brackuro Studios LLC.
+
+## Overview
+
+This repository is intended for VR experimentation, interaction systems, interface mechanics, and related tooling.
+
+## License
+
+Copyright (c) 2026 Master Nytmaer / Brackuro Studios LLC
+
+This project is licensed under the MIT License.
+
+See the [LICENSE](LICENSE) file for full details.

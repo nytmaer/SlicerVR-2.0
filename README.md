@@ -2,7 +2,7 @@
 
 **A web-based MP4 video trimmer designed for Meta Quest 3 and desktop browsers. Trim your VR gameplay recordings without removing your headset.**
 
-[![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
+
 [![Buy me a Kofi](https://img.shields.io/badge/Buy%20me%20a%20Kofi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/nytmaer)
 
 ## Live Demo

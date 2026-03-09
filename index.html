@@ -12,7 +12,7 @@ SPDX-License-Identifier: MIT
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>SlicerVR 2.0 - MP4 Video Trimmer</title>
+    <title>SlicerVR 2.0 - Video Trimmer</title>
     <style>
         * {
             margin: 0;
@@ -755,15 +755,15 @@ SPDX-License-Identifier: MIT
         </div>
         <div class="status-pill">
             <span class="status-dot"></span>
-            <span>MP4 Ready</span>
+            <span id="formatBadge">WebM Ready</span>
         </div>
     </header>
 
     <main class="container">
         <div class="upload-card" id="uploadCard">
             <div class="upload-icon">📁</div>
-            <h2 class="upload-title">Drop your MP4 video here</h2>
-            <p class="upload-subtitle">or click to browse files</p>
+            <h2 class="upload-title">Drop your video here</h2>
+            <p class="upload-subtitle">MP4, WebM, MOV supported</p>
             <div class="file-types">
                 <span class="file-badge mp4">MP4</span>
                 <span class="file-badge">WebM</span>
@@ -850,7 +850,7 @@ SPDX-License-Identifier: MIT
                         <span>↺</span> Reset
                     </button>
                     <button class="btn primary" id="btnExport">
-                        <span>✂️</span> Export MP4
+                        <span>✂️</span> Export Clip
                     </button>
                     <button class="btn" id="btnNew">
                         <span>📁</span> New File
@@ -887,8 +887,8 @@ SPDX-License-Identifier: MIT
             <div class="export-icon">✂️</div>
         </div>
         <div class="export-text">
-            <div class="export-title">Recording Your Clip</div>
-            <div class="export-subtitle">Capturing MP4 from trim window...</div>
+            <div class="export-title" id="exportTitle">Recording Your Clip</div>
+            <div class="export-subtitle" id="exportSubtitle">Capturing video...</div>
         </div>
         <div class="progress-container">
             <div class="progress-bar" id="progressBar"></div>
@@ -898,6 +898,30 @@ SPDX-License-Identifier: MIT
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
+        // Detect best export format on load
+        function detectBestFormat() {
+            const types = [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm',
+                'video/mp4;codecs=h264,aac',
+                'video/mp4'
+            ];
+            for (const type of types) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    return type;
+                }
+            }
+            return 'video/webm';
+        }
+
+        const bestFormat = detectBestFormat();
+        const isWebM = bestFormat.includes('webm');
+        const formatLabel = isWebM ? 'WebM' : 'MP4';
+        
+        // Update UI to show actual format
+        document.getElementById('formatBadge').textContent = formatLabel + ' Ready';
+
         const state = {
             videoFile: null,
             videoUrl: null,
@@ -909,7 +933,9 @@ SPDX-License-Identifier: MIT
             dragType: null,
             dragStartX: 0,
             dragStartLeft: 0,
-            dragStartRight: 0
+            dragStartRight: 0,
+            exportFormat: bestFormat,
+            exportExtension: isWebM ? 'webm' : 'mp4'
         };
 
         const uploadCard = document.getElementById('uploadCard');
@@ -1167,28 +1193,16 @@ SPDX-License-Identifier: MIT
             document.getElementById('btnExport').disabled = true;
             document.getElementById('exportModal').classList.add('active');
             
+            // Update export modal text based on format
+            const formatName = state.exportExtension.toUpperCase();
+            document.getElementById('exportTitle').textContent = `Recording ${formatName} Clip`;
+            document.getElementById('exportSubtitle').textContent = `Capturing ${formatName} video...`;
+            
             try {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 canvas.width = video.videoWidth || 1920;
                 canvas.height = video.videoHeight || 1080;
-                
-                const mimeTypes = [
-                    'video/mp4;codecs=h264,aac',
-                    'video/mp4;codecs=avc1,mp4a',
-                    'video/webm;codecs=h264,opus',
-                    'video/webm'
-                ];
-                
-                let mimeType = '';
-                for (const mime of mimeTypes) {
-                    if (MediaRecorder.isTypeSupported(mime)) {
-                        mimeType = mime;
-                        break;
-                    }
-                }
-                
-                if (!mimeType) throw new Error('No supported format');
                 
                 const stream = canvas.captureStream(30);
                 const audioStream = video.captureStream();
@@ -1196,7 +1210,7 @@ SPDX-License-Identifier: MIT
                 if (audioTrack) stream.addTrack(audioTrack);
                 
                 const recorder = new MediaRecorder(stream, {
-                    mimeType: mimeType,
+                    mimeType: state.exportFormat,
                     videoBitsPerSecond: 8000000
                 });
                 
@@ -1206,19 +1220,18 @@ SPDX-License-Identifier: MIT
                 };
                 
                 recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: mimeType });
+                    const blob = new Blob(chunks, { type: state.exportFormat });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
                     const timestamp = new Date().toISOString().slice(0,19).replace(/:/g,'-');
-                    a.download = `SlicerVR_Trim_${timestamp}.${ext}`;
+                    a.download = `SlicerVR_Trim_${timestamp}.${state.exportExtension}`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                     finishExport();
-                    showToast(`Exported ${formatTime(duration)} clip!`, 'success');
+                    showToast(`Exported ${formatTime(duration)} ${formatName} clip!`, 'success');
                 };
                 
                 recorder.start(100);

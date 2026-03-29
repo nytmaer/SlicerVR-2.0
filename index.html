@@ -13,6 +13,25 @@ SPDX-License-Identifier: MIT
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SlicerVR 2.0 - Video Trimmer</title>
+
+    <!-- Module imports for modern export pipeline -->
+    <script type="module">
+        import { 
+            Input, Output, Conversion, 
+            BlobSource, StreamTarget, 
+            WebMOutputFormat, MP4OutputFormat,
+            QUALITY_HIGH, QUALITY_MEDIUM, ALL_FORMATS 
+        } from 'https://cdn.jsdelivr.net/npm/mediabunny@1.40.1/+esm';
+        import streamSaver from 'https://cdn.jsdelivr.net/npm/streamsaver@2.0.6/+esm';
+
+        // Make available to existing script
+        window.MediaToolkit = { 
+            Input, Output, Conversion, BlobSource, StreamTarget, 
+            WebMOutputFormat, MP4OutputFormat, QUALITY_HIGH, QUALITY_MEDIUM, ALL_FORMATS, 
+            streamSaver 
+        };
+    </script>
+
     <style>
         * {
             margin: 0;
@@ -90,6 +109,37 @@ SPDX-License-Identifier: MIT
         .tagline {
             font-size: 0.85rem;
             color: var(--text-dim);
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        #formatSelect {
+            background: var(--bg-panel);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            outline: none;
+        }
+
+        #formatSelect:hover {
+            border-color: var(--accent);
+        }
+
+        #formatSelect option {
+            background: var(--bg-panel);
+            color: var(--text);
+        }
+
+        #formatSelect option:disabled {
+            color: var(--text-dim);
+            opacity: 0.5;
         }
 
         .status-pill {
@@ -735,6 +785,7 @@ SPDX-License-Identifier: MIT
             .logo-text { font-size: 1.25rem; }
             .timeline-card { padding: 1rem; }
             .controls-grid { grid-template-columns: repeat(2, 1fr); }
+            .header-controls { flex-wrap: wrap; justify-content: flex-end; }
         }
 
         @media (hover: none) and (pointer: coarse) {
@@ -743,6 +794,7 @@ SPDX-License-Identifier: MIT
             .btn { min-height: 56px; }
         }
     </style>
+<base target="_blank">
 </head>
 <body>
     <header class="header">
@@ -753,9 +805,15 @@ SPDX-License-Identifier: MIT
                 <div class="tagline">ClipCut Timeline Editor</div>
             </div>
         </div>
-        <div class="status-pill">
-            <span class="status-dot"></span>
-            <span id="formatBadge">WebM Ready</span>
+        <div class="header-controls">
+            <select id="formatSelect">
+                <option value="webm">WebM (Fastest)</option>
+                <option value="mp4">MP4 (Best Compatibility)</option>
+            </select>
+            <div class="status-pill">
+                <span class="status-dot"></span>
+                <span id="formatBadge">Detecting...</span>
+            </div>
         </div>
     </header>
 
@@ -887,8 +945,8 @@ SPDX-License-Identifier: MIT
             <div class="export-icon">✂️</div>
         </div>
         <div class="export-text">
-            <div class="export-title" id="exportTitle">Recording Your Clip</div>
-            <div class="export-subtitle" id="exportSubtitle">Capturing video...</div>
+            <div class="export-title" id="exportTitle">Preparing Export</div>
+            <div class="export-subtitle" id="exportSubtitle">Detecting capabilities...</div>
         </div>
         <div class="progress-container">
             <div class="progress-bar" id="progressBar"></div>
@@ -898,29 +956,314 @@ SPDX-License-Identifier: MIT
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
-        // Detect best export format on load
-        function detectBestFormat() {
-            const types = [
-                'video/webm;codecs=vp9,opus',
-                'video/webm;codecs=vp8,opus',
-                'video/webm',
-                'video/mp4;codecs=h264,aac',
-                'video/mp4'
-            ];
-            for (const type of types) {
-                if (MediaRecorder.isTypeSupported(type)) {
-                    return type;
+        // ============================================================
+        // SlicerVR 2.0 - Hardware-Accelerated Export System
+        // ============================================================
+
+        class SlicerVRExporter {
+            constructor(videoElement) {
+                this.video = videoElement;
+                this.abortController = null;
+                this.writer = null;
+            }
+
+            static async getCapabilities() {
+                const caps = {
+                    webCodecs: false,
+                    webmHardware: false,
+                    mp4Hardware: false,
+                    mediaRecorder: true
+                };
+
+                if (typeof VideoEncoder === 'undefined') return caps;
+                caps.webCodecs = true;
+
+                try {
+                    const webmTest = await VideoEncoder.isConfigSupported({
+                        codec: 'vp09.00.10.08',
+                        width: 1920, height: 1080,
+                        hardwareAcceleration: 'prefer-hardware',
+                        bitrate: 20000000
+                    });
+                    caps.webmHardware = webmTest.supported;
+                } catch(e) {}
+
+                try {
+                    const mp4Test = await VideoEncoder.isConfigSupported({
+                        codec: 'avc1.42001E',
+                        width: 1920, height: 1080,
+                        hardwareAcceleration: 'prefer-hardware',
+                        bitrate: 20000000
+                    });
+                    caps.mp4Hardware = mp4Test.supported;
+                } catch(e) {}
+
+                return caps;
+            }
+
+            async export(startTime, endTime, format, onProgress, onComplete, onError) {
+                this.abortController = new AbortController();
+                const signal = this.abortController.signal;
+
+                try {
+                    const caps = await SlicerVRExporter.getCapabilities();
+
+                    if (format === 'mp4' && caps.mp4Hardware) {
+                        await this._exportMP4Hardware(startTime, endTime, onProgress, signal);
+                    } else if (format === 'webm' && caps.webmHardware) {
+                        await this._exportWebMHardware(startTime, endTime, onProgress, signal);
+                    } else if (caps.webCodecs) {
+                        await this._exportWebCodecsSoftware(startTime, endTime, format, onProgress, signal);
+                    } else {
+                        await this._exportMediaRecorder(startTime, endTime, format, onProgress, signal);
+                    }
+                    onComplete();
+                } catch (err) {
+                    if (err.name !== 'AbortError') onError(err);
                 }
             }
-            return 'video/webm';
+
+            abort() {
+                if (this.abortController) this.abortController.abort();
+                if (this.writer) { try { this.writer.abort(); } catch(e) {} }
+            }
+
+            async _exportMP4Hardware(startTime, endTime, onProgress, signal) {
+                const { Input, Output, Conversion, BlobSource, StreamTarget, 
+                        MP4OutputFormat, QUALITY_HIGH, ALL_FORMATS } = window.MediaToolkit;
+                const { streamSaver } = window.MediaToolkit;
+
+                const timestamp = new Date().toISOString().slice(0,19).replace(/:/g,'-');
+                const fileStream = streamSaver.createWriteStream(`SlicerVR_Trim_${timestamp}.mp4`);
+                this.writer = fileStream.getWriter();
+
+                const input = new Input({ source: new BlobSource(window.state.videoFile), formats: ALL_FORMATS });
+                const output = new Output({
+                    format: new MP4OutputFormat({
+                        streaming: true,
+                        fastStart: 'in-memory',
+                        video: { codec: 'avc1.42001E', bitrate: 20000000 },
+                        audio: { codec: 'aac', bitrate: 128000 }
+                    }),
+                    target: new StreamTarget(this.writer),
+                });
+
+                const conversion = await Conversion.init({ input, output });
+                conversion.configure({ trim: { start: startTime, end: endTime } });
+
+                let lastProgress = 0;
+                const interval = setInterval(() => {
+                    const p = conversion.getProgress();
+                    if (p !== lastProgress) { onProgress(p * 100); lastProgress = p; }
+                }, 100);
+
+                signal.addEventListener('abort', () => { clearInterval(interval); conversion.abort(); });
+                await conversion.execute();
+                clearInterval(interval);
+                await this.writer.close();
+            }
+
+            async _exportWebMHardware(startTime, endTime, onProgress, signal) {
+                const { Input, Output, Conversion, BlobSource, StreamTarget, 
+                        WebMOutputFormat, QUALITY_HIGH, ALL_FORMATS } = window.MediaToolkit;
+                const { streamSaver } = window.MediaToolkit;
+
+                const timestamp = new Date().toISOString().slice(0,19).replace(/:/g,'-');
+                const fileStream = streamSaver.createWriteStream(`SlicerVR_Trim_${timestamp}.webm`);
+                this.writer = fileStream.getWriter();
+
+                const input = new Input({ source: new BlobSource(window.state.videoFile), formats: ALL_FORMATS });
+                const output = new Output({
+                    format: new WebMOutputFormat({
+                        streaming: true,
+                        video: { codec: 'vp9', bitrate: 20000000 },
+                        audio: { codec: 'opus', bitrate: 128000 }
+                    }),
+                    target: new StreamTarget(this.writer),
+                });
+
+                const conversion = await Conversion.init({ input, output });
+                conversion.configure({ trim: { start: startTime, end: endTime } });
+
+                let lastProgress = 0;
+                const interval = setInterval(() => {
+                    const p = conversion.getProgress();
+                    if (p !== lastProgress) { onProgress(p * 100); lastProgress = p; }
+                }, 100);
+
+                signal.addEventListener('abort', () => { clearInterval(interval); conversion.abort(); });
+                await conversion.execute();
+                clearInterval(interval);
+                await this.writer.close();
+            }
+
+            async _exportWebCodecsSoftware(startTime, endTime, format, onProgress, signal) {
+                const { Input, Output, Conversion, BlobSource, StreamTarget, 
+                        WebMOutputFormat, MP4OutputFormat, QUALITY_MEDIUM, ALL_FORMATS } = window.MediaToolkit;
+                const { streamSaver } = window.MediaToolkit;
+
+                const timestamp = new Date().toISOString().slice(0,19).replace(/:/g,'-');
+                const ext = format === 'mp4' ? 'mp4' : 'webm';
+                const fileStream = streamSaver.createWriteStream(`SlicerVR_Trim_${timestamp}.${ext}`);
+                this.writer = fileStream.getWriter();
+
+                const input = new Input({ source: new BlobSource(window.state.videoFile), formats: ALL_FORMATS });
+                const OutputFormat = format === 'mp4' ? MP4OutputFormat : WebMOutputFormat;
+                const output = new Output({
+                    format: new OutputFormat({
+                        streaming: true,
+                        video: { 
+                            codec: format === 'mp4' ? 'avc1.42001E' : 'vp9', 
+                            bitrate: 8000000,
+                            hardwareAcceleration: 'prefer-software'
+                        },
+                        audio: { 
+                            codec: format === 'mp4' ? 'aac' : 'opus', 
+                            bitrate: 128000 
+                        }
+                    }),
+                    target: new StreamTarget(this.writer),
+                });
+
+                const conversion = await Conversion.init({ input, output });
+                conversion.configure({ 
+                    trim: { start: startTime, end: endTime },
+                    video: { quality: QUALITY_MEDIUM }
+                });
+
+                let lastProgress = 0;
+                const interval = setInterval(() => {
+                    const p = conversion.getProgress();
+                    if (p !== lastProgress) { onProgress(p * 100); lastProgress = p; }
+                }, 100);
+
+                signal.addEventListener('abort', () => { clearInterval(interval); conversion.abort(); });
+                await conversion.execute();
+                clearInterval(interval);
+                await this.writer.close();
+            }
+
+            async _exportMediaRecorder(startTime, endTime, format, onProgress, signal) {
+                const { streamSaver } = window.MediaToolkit;
+                const duration = endTime - startTime;
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { alpha: false });
+
+                const maxRes = 2560;
+                let w = this.video.videoWidth;
+                let h = this.video.videoHeight;
+                if (w > maxRes || h > maxRes) {
+                    const ratio = Math.min(maxRes / w, maxRes / h);
+                    w = Math.floor(w * ratio);
+                    h = Math.floor(h * ratio);
+                }
+                canvas.width = w;
+                canvas.height = h;
+
+                const timestamp = new Date().toISOString().slice(0,19).replace(/:/g,'-');
+                const ext = format === 'mp4' ? 'mp4' : 'webm';
+                const fileStream = streamSaver.createWriteStream(`SlicerVR_Trim_${timestamp}.${ext}`);
+                this.writer = fileStream.getWriter();
+
+                const stream = canvas.captureStream(60);
+                const audioStream = this.video.captureStream();
+                const audioTrack = audioStream.getAudioTracks()[0];
+                if (audioTrack) stream.addTrack(audioTrack);
+
+                const mimeTypes = format === 'mp4' 
+                    ? ['video/mp4;codecs=h264,aac', 'video/mp4']
+                    : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+
+                let selectedMime = '';
+                for (const type of mimeTypes) {
+                    if (MediaRecorder.isTypeSupported(type)) { selectedMime = type; break; }
+                }
+
+                const recorder = new MediaRecorder(stream, {
+                    mimeType: selectedMime || 'video/webm',
+                    videoBitsPerSecond: 8000000
+                });
+
+                recorder.ondataavailable = async (e) => {
+                    if (e.data.size > 0 && !signal.aborted) {
+                        const buffer = await e.data.arrayBuffer();
+                        await this.writer.write(new Uint8Array(buffer));
+                    }
+                };
+
+                recorder.onstop = async () => { await this.writer.close(); };
+                signal.addEventListener('abort', () => { recorder.stop(); });
+
+                recorder.start(100);
+                this.video.currentTime = startTime;
+                await this._waitForSeek();
+
+                let lastFrame = performance.now();
+                const targetFrame = 1000 / 60;
+
+                const render = () => {
+                    if (signal.aborted) return;
+                    const now = performance.now();
+                    if (now - lastFrame < targetFrame) { requestAnimationFrame(render); return; }
+                    lastFrame = now;
+
+                    const current = this.video.currentTime;
+                    onProgress(((current - startTime) / duration) * 100);
+                    if (current >= endTime) { recorder.stop(); return; }
+
+                    ctx.drawImage(this.video, 0, 0, w, h);
+                    requestAnimationFrame(render);
+                };
+
+                this.video.play();
+                requestAnimationFrame(render);
+
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => reject(new Error('Timeout')), duration * 3000);
+                    recorder.onstop = () => { clearTimeout(timeout); resolve(); };
+                });
+            }
+
+            _waitForSeek() {
+                return new Promise((resolve) => {
+                    const check = () => {
+                        if (Math.abs(this.video.currentTime - this.startTime) < 0.05) resolve();
+                        else this.video.addEventListener('seeked', check, { once: true });
+                    };
+                    check();
+                });
+            }
         }
 
-        const bestFormat = detectBestFormat();
-        const isWebM = bestFormat.includes('webm');
-        const formatLabel = isWebM ? 'WebM' : 'MP4';
-        
-        // Update UI to show actual format
-        document.getElementById('formatBadge').textContent = formatLabel + ' Ready';
+        // ============================================================
+        // Original SlicerVR UI Code (Preserved)
+        // ============================================================
+
+        async function detectBestFormat() {
+            const caps = await SlicerVRExporter.getCapabilities();
+            const select = document.getElementById('formatSelect');
+            const badge = document.getElementById('formatBadge');
+
+            if (caps.mp4Hardware) {
+                badge.textContent = 'MP4 Hardware Ready';
+                badge.style.background = 'rgba(46, 213, 115, 0.2)';
+                select.value = 'mp4';
+            } else if (caps.webmHardware) {
+                badge.textContent = 'WebM Hardware Ready';
+                select.value = 'webm';
+            } else if (caps.webCodecs) {
+                badge.textContent = 'Software Encoding';
+                select.value = 'webm';
+            } else {
+                badge.textContent = 'Standard Export';
+                select.value = 'webm';
+            }
+
+            if (!caps.mp4Hardware && !caps.webCodecs) {
+                select.querySelector('option[value="mp4"]').disabled = true;
+            }
+        }
 
         const state = {
             videoFile: null,
@@ -933,9 +1276,7 @@ SPDX-License-Identifier: MIT
             dragType: null,
             dragStartX: 0,
             dragStartLeft: 0,
-            dragStartRight: 0,
-            exportFormat: bestFormat,
-            exportExtension: isWebM ? 'webm' : 'mp4'
+            dragStartRight: 0
         };
 
         const uploadCard = document.getElementById('uploadCard');
@@ -999,7 +1340,6 @@ SPDX-License-Identifier: MIT
 
         video.addEventListener('timeupdate', () => {
             updatePlayhead();
-            if (state.isExporting) updateExportProgress();
         });
 
         video.addEventListener('play', () => {
@@ -1014,10 +1354,6 @@ SPDX-License-Identifier: MIT
             document.getElementById('btnPlay').innerHTML = '<span>▶</span> Play';
             playBtn.textContent = '▶';
             playBtn.classList.add('visible');
-        });
-
-        video.addEventListener('ended', () => {
-            if (state.isExporting) finishExport();
         });
 
         function getTimes() {
@@ -1062,12 +1398,10 @@ SPDX-License-Identifier: MIT
             state.dragStartX = clientX;
             state.dragStartLeft = state.trimLeft;
             state.dragStartRight = state.trimRight;
-            
-            if (e.target.closest('.trim-handle.left')) {
-                state.dragType = 'left';
-            } else if (e.target.closest('.trim-handle.right')) {
-                state.dragType = 'right';
-            } else if (e.target === selWindow || e.target.closest('.selection-window')) {
+
+            if (e.target.closest('.trim-handle.left')) state.dragType = 'left';
+            else if (e.target.closest('.trim-handle.right')) state.dragType = 'right';
+            else if (e.target === selWindow || e.target.closest('.selection-window')) {
                 state.dragType = 'window';
                 selWindow.classList.add('dragging');
             } else {
@@ -1075,7 +1409,7 @@ SPDX-License-Identifier: MIT
                 video.currentTime = (pct / 100) * state.duration;
                 return;
             }
-            
+
             document.addEventListener('mousemove', onDrag);
             document.addEventListener('mouseup', endDrag);
             document.addEventListener('touchmove', onDrag, {passive: false});
@@ -1089,7 +1423,7 @@ SPDX-License-Identifier: MIT
             const rect = timelineTrack.getBoundingClientRect();
             const deltaPct = ((clientX - state.dragStartX) / rect.width) * 100;
             const minWindow = 2;
-            
+
             if (state.dragType === 'left') {
                 const newLeft = Math.max(0, Math.min(100 - state.dragStartRight - minWindow, state.dragStartLeft + deltaPct));
                 state.trimLeft = newLeft;
@@ -1100,13 +1434,8 @@ SPDX-License-Identifier: MIT
                 const windowSize = 100 - state.dragStartLeft - state.dragStartRight;
                 let newLeft = state.dragStartLeft + deltaPct;
                 let newRight = state.dragStartRight - deltaPct;
-                if (newLeft < 0) {
-                    newLeft = 0;
-                    newRight = 100 - windowSize;
-                } else if (newRight < 0) {
-                    newRight = 0;
-                    newLeft = 100 - windowSize;
-                }
+                if (newLeft < 0) { newLeft = 0; newRight = 100 - windowSize; }
+                else if (newRight < 0) { newRight = 0; newLeft = 100 - windowSize; }
                 state.trimLeft = newLeft;
                 state.trimRight = newRight;
             }
@@ -1121,9 +1450,7 @@ SPDX-License-Identifier: MIT
             document.removeEventListener('touchmove', onDrag);
             document.removeEventListener('touchend', endDrag);
             const { start, end } = getTimes();
-            if (video.currentTime < start || video.currentTime > end) {
-                video.currentTime = start;
-            }
+            if (video.currentTime < start || video.currentTime > end) video.currentTime = start;
         }
 
         handleLeft.addEventListener('mousedown', startDrag);
@@ -1142,13 +1469,9 @@ SPDX-License-Identifier: MIT
         document.getElementById('btnPlay').addEventListener('click', () => {
             const { start, end } = getTimes();
             if (video.paused) {
-                if (video.currentTime < start || video.currentTime >= end) {
-                    video.currentTime = start;
-                }
+                if (video.currentTime < start || video.currentTime >= end) video.currentTime = start;
                 video.play();
-            } else {
-                video.pause();
-            }
+            } else video.pause();
         });
 
         playBtn.addEventListener('click', () => document.getElementById('btnPlay').click());
@@ -1181,103 +1504,70 @@ SPDX-License-Identifier: MIT
             fileInput.value = '';
         });
 
+        // ============================================================
+        // NEW: Hardware-Accelerated Export Handler
+        // ============================================================
+
+        let currentExporter = null;
+
         document.getElementById('btnExport').addEventListener('click', async () => {
             if (state.isExporting) return;
+
             const { start, end, duration } = getTimes();
             if (duration < 0.5) {
                 showToast('Clip too short (min 0.5s)', 'error');
                 return;
             }
-            
+
+            const format = document.getElementById('formatSelect').value;
             state.isExporting = true;
             document.getElementById('btnExport').disabled = true;
             document.getElementById('exportModal').classList.add('active');
-            
-            // Update export modal text based on format
-            const formatName = state.exportExtension.toUpperCase();
-            document.getElementById('exportTitle').textContent = `Recording ${formatName} Clip`;
-            document.getElementById('exportSubtitle').textContent = `Capturing ${formatName} video...`;
-            
+
+            const caps = await SlicerVRExporter.getCapabilities();
+            let method = 'Software';
+            if (format === 'mp4' && caps.mp4Hardware) method = 'Hardware (GPU)';
+            else if (format === 'webm' && caps.webmHardware) method = 'Hardware (GPU)';
+            else if (caps.webCodecs) method = 'WebCodecs';
+
+            document.getElementById('exportTitle').textContent = `Exporting ${format.toUpperCase()}`;
+            document.getElementById('exportSubtitle').textContent = `${method} encoding - streaming to disk...`;
+
+            currentExporter = new SlicerVRExporter(video);
+
             try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = video.videoWidth || 1920;
-                canvas.height = video.videoHeight || 1080;
-                
-                const stream = canvas.captureStream(30);
-                const audioStream = video.captureStream();
-                const audioTrack = audioStream.getAudioTracks()[0];
-                if (audioTrack) stream.addTrack(audioTrack);
-                
-                const recorder = new MediaRecorder(stream, {
-                    mimeType: state.exportFormat,
-                    videoBitsPerSecond: 8000000
-                });
-                
-                const chunks = [];
-                recorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) chunks.push(e.data);
-                };
-                
-                recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: state.exportFormat });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    const timestamp = new Date().toISOString().slice(0,19).replace(/:/g,'-');
-                    a.download = `SlicerVR_Trim_${timestamp}.${state.exportExtension}`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                    finishExport();
-                    showToast(`Exported ${formatTime(duration)} ${formatName} clip!`, 'success');
-                };
-                
-                recorder.start(100);
-                video.currentTime = start;
-                await new Promise(resolve => {
-                    const check = () => {
-                        if (Math.abs(video.currentTime - start) < 0.05) {
-                            resolve();
-                        } else {
-                            requestAnimationFrame(check);
-                        }
-                    };
-                    video.addEventListener('seeked', check, { once: true });
-                });
-                
-                video.play();
-                
-                const render = () => {
-                    if (!state.isExporting) return;
-                    if (video.currentTime >= end) {
-                        recorder.stop();
-                        return;
+                await currentExporter.export(
+                    start, end, format,
+                    (progress) => { document.getElementById('progressBar').style.width = progress + '%'; },
+                    () => {
+                        finishExport();
+                        showToast(`Exported ${formatTime(duration)} ${format.toUpperCase()} clip!`, 'success');
+                        currentExporter = null;
+                    },
+                    (err) => {
+                        console.error('Export failed:', err);
+                        showToast('Export failed: ' + err.message, 'error');
+                        finishExport();
+                        currentExporter = null;
                     }
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    requestAnimationFrame(render);
-                };
-                render();
-                
-                setTimeout(() => {
-                    if (state.isExporting && recorder.state !== 'inactive') {
-                        recorder.stop();
-                    }
-                }, (duration * 1.5 + 5) * 1000);
-                
+                );
             } catch (err) {
-                console.error(err);
-                showToast('Export failed: ' + err.message, 'error');
+                console.error('Export error:', err);
                 finishExport();
+                currentExporter = null;
             }
         });
 
-        function updateExportProgress() {
-            const { start, end } = getTimes();
-            const progress = ((video.currentTime - start) / (end - start)) * 100;
-            document.getElementById('progressBar').style.width = Math.max(0, Math.min(100, progress)) + '%';
-        }
+        document.getElementById('exportModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('exportModal') && currentExporter) {
+                if (confirm('Cancel export?')) {
+                    currentExporter.abort();
+                    currentExporter = null;
+                    finishExport();
+                    showToast('Export cancelled', 'error');
+                }
+            }
+        });
 
         function finishExport() {
             state.isExporting = false;
@@ -1324,9 +1614,7 @@ SPDX-License-Identifier: MIT
             const m = Math.floor((seconds % 3600) / 60);
             const s = Math.floor(seconds % 60);
             const ms = Math.floor((seconds % 1) * 100);
-            if (h > 0) {
-                return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-            }
+            if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
             return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
         }
 
@@ -1342,6 +1630,8 @@ SPDX-License-Identifier: MIT
             }, 3000);
         }
 
+        // Initialize
+        detectBestFormat();
         updateUI();
     </script>
 </body>

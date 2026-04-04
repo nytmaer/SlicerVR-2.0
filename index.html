@@ -1,18 +1,18 @@
 <!--
-SlicerVR 2.0005
+SlicerVR 2.0007
 Copyright (c) 2026 / Brackuro Studios LLC
 
 Licensed under the MIT License.
 SPDX-License-Identifier: MIT
 
-Official Version 2.0005 - Production Release
+Official Version 2.0007 - Production Release
 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>SlicerVR 2.0005 - Video Trimmer</title>
+    <title>SlicerVR 2.0007 - Video Trimmer</title>
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
@@ -120,7 +120,10 @@ Official Version 2.0005 - Production Release
         .toast.success { border-left-color: var(--success); }
         .toast.error { border-left-color: var(--danger); }
         @keyframes slideIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
-                .kofi-btn { display: flex; align-items: center; gap: 0.5rem; background: linear-gradient(135deg, #ff5f5f, #ff7b7b); color: #fff; padding: 0.5rem 1rem; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: all 0.2s; border: 1px solid rgba(255,255,255,0.2); }
+                .update-btn { display: flex; align-items: center; gap: 0.45rem; background: rgba(0, 212, 255, 0.12); color: var(--accent); padding: 0.5rem 0.8rem; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.35); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s; }
+        .update-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px var(--accent-glow); }
+        .update-btn:disabled { opacity: 0.6; cursor: wait; transform: none; }
+        .kofi-btn { display: flex; align-items: center; gap: 0.5rem; background: linear-gradient(135deg, #ff5f5f, #ff7b7b); color: #fff; padding: 0.5rem 1rem; border-radius: 8px; text-decoration: none; font-size: 0.85rem; font-weight: 600; transition: all 0.2s; border: 1px solid rgba(255,255,255,0.2); }
         .kofi-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(255, 95, 95, 0.4); }
         .kofi-icon { font-size: 1rem; }
         .kofi-text { display: inline; }
@@ -129,18 +132,21 @@ Official Version 2.0005 - Production Release
         @media (hover: none) and (pointer: coarse) { .trim-handle { width: 44px; } .trim-handle:hover { width: 48px; } .btn { min-height: 56px; } }
     </style>
 <base target="_blank">
-<base target="_blank">
 </head>
 <body>
     <header class="header">
         <div class="brand">
             <div class="logo-icon">✂️</div>
             <div>
-                <div class="logo-text">SlicerVR<span class="version-badge">2.0005</span></div>
+                <div class="logo-text">SlicerVR<span class="version-badge" id="versionBadge">2.0007</span></div>
                 <div class="tagline">ClipCut Timeline Editor</div>
             </div>
         </div>
         <div class="header-controls">
+            <button class="update-btn" id="btnCheckUpdates" title="Check if a newer version is available">
+                <span>⬆</span>
+                <span>Check Updates</span>
+            </button>
             <a href="https://ko-fi.com/nytmaer" target="_blank" class="kofi-btn" title="Support on Ko-fi">
                 <span class="kofi-icon">☕</span>
                 <span class="kofi-text">Support</span>
@@ -276,6 +282,9 @@ Official Version 2.0005 - Production Release
 
         let MediaToolkit = null;
         let toolkitLoaded = false;
+
+        const APP_VERSION = '2.0007';
+        const UPDATE_REPO = 'Nytmaer/SlicerVR-2.0';
 
         try {
             MediaToolkit = await import('https://esm.sh/mediabunny');
@@ -498,6 +507,78 @@ Official Version 2.0005 - Production Release
             }
         }
 
+        function normalizeVersion(version) {
+            return version.replace(/^v/i, '').trim();
+        }
+
+        function compareVersions(a, b) {
+            const aParts = normalizeVersion(a).split('.').map((p) => parseInt(p, 10) || 0);
+            const bParts = normalizeVersion(b).split('.').map((p) => parseInt(p, 10) || 0);
+            const maxLen = Math.max(aParts.length, bParts.length);
+            for (let i = 0; i < maxLen; i++) {
+                const delta = (aParts[i] || 0) - (bParts[i] || 0);
+                if (delta !== 0) return delta;
+            }
+            return 0;
+        }
+
+        async function fetchLatestVersion() {
+            const releaseUrl = `https://api.github.com/repos/${UPDATE_REPO}/releases/latest`;
+            const tagsUrl = `https://api.github.com/repos/${UPDATE_REPO}/tags?per_page=1`;
+            const commonHeaders = { 'Accept': 'application/vnd.github+json' };
+
+            try {
+                const releaseResponse = await fetch(releaseUrl, { headers: commonHeaders, cache: 'no-store' });
+                if (releaseResponse.ok) {
+                    const releaseData = await releaseResponse.json();
+                    const releaseVersion = normalizeVersion(releaseData.tag_name || releaseData.name || '');
+                    if (releaseVersion) {
+                        return { latestVersion: releaseVersion, pageUrl: releaseData.html_url };
+                    }
+                }
+            } catch (err) {}
+
+            const tagsResponse = await fetch(tagsUrl, { headers: commonHeaders, cache: 'no-store' });
+            if (tagsResponse.ok) {
+                const tagsData = await tagsResponse.json();
+                const topTag = normalizeVersion(tagsData?.[0]?.name || '');
+                if (topTag) {
+                    return {
+                        latestVersion: topTag,
+                        pageUrl: `https://github.com/${UPDATE_REPO}/tags`
+                    };
+                }
+            }
+
+            throw new Error('No releases or tags found yet');
+        }
+
+        async function checkForUpdates() {
+            const button = document.getElementById('btnCheckUpdates');
+            const versionBadge = document.getElementById('versionBadge');
+            button.disabled = true;
+            button.querySelector('span:last-child').textContent = 'Checking...';
+
+            try {
+                const { latestVersion, pageUrl } = await fetchLatestVersion();
+
+                if (compareVersions(latestVersion, APP_VERSION) > 0) {
+                    versionBadge.textContent = `${APP_VERSION} → ${latestVersion}`;
+                    showToast(`Update available: ${latestVersion}`, 'success');
+                    if (pageUrl && confirm(`Version ${latestVersion} is available. Open GitHub page?`)) {
+                        window.open(pageUrl, '_blank', 'noopener,noreferrer');
+                    }
+                } else {
+                    showToast(`You are up to date (v${APP_VERSION})`, 'success');
+                }
+            } catch (err) {
+                showToast('Update check failed: ' + (err.message || 'Network issue'), 'error');
+            } finally {
+                button.disabled = false;
+                button.querySelector('span:last-child').textContent = 'Check Updates';
+            }
+        }
+
         async function detectBestFormat() {
             const caps = await SlicerVRExporter.getCapabilities();
             const select = document.getElementById('formatSelect');
@@ -699,6 +780,8 @@ Official Version 2.0005 - Production Release
         timelineTrack.addEventListener('click', (e) => {
             if (!state.dragType) video.currentTime = (getPctFromX(e.clientX) / 100) * state.duration;
         });
+
+        document.getElementById('btnCheckUpdates').addEventListener('click', checkForUpdates);
 
         document.getElementById('btnPlay').addEventListener('click', () => {
             const { start, end } = getTimes();

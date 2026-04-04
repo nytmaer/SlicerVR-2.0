@@ -15,6 +15,7 @@
 - 📱 **Cross-Platform** - Desktop, mobile, and VR headsets
 - 💾 **Privacy First** - Video never leaves your device
 - 🚀 **Zero Setup** - Single HTML file, no dependencies
+- ⬆️ **Update Checker** - One-click check for the latest release/tag on GitHub
 
 ## How to Use
 

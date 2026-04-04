@@ -1,24 +1,24 @@
 <!--
-SlicerVR 2.0005
-Copyright (c) 2026 Master Nytmaer / Brackuro Studios LLC
+SlicerVR 2.0007
+Copyright (c) 2026 Brackuro Studios LLC
 
 Licensed under the MIT License.
 SPDX-License-Identifier: MIT
 
-Official Version 2.0005 - Production Release
+Official Version 2.0006 - Production Release
 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>SlicerVR 2.0005 - Video Trimmer</title>
+    <title>SlicerVR 2.0007 - Video Trimmer</title>
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
         :root { --bg-dark: #0a0a0f; --bg-panel: #151520; --bg-card: #1a1a2e; --accent: #00d4ff; --accent-glow: rgba(0, 212, 255, 0.4); --text: #ffffff; --text-dim: #888899; --danger: #ff4757; --success: #2ed573; --trim-dim: rgba(0, 0, 0, 0.7); --trim-selected: rgba(0, 212, 255, 0.3); --border: rgba(255, 255, 255, 0.1); }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-dark); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
-        .header { background: linear-gradient(180deg, var(--bg-panel) 0%, transparent 100%); padding: 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; backdrop-filter: blur(10px); }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-dark); color: var(--text); height: 100dvh; display: flex; flex-direction: column; overflow: hidden; margin: 0; }
+        .header { background: linear-gradient(180deg, var(--bg-panel) 0%, transparent 100%); padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; backdrop-filter: blur(10px); }
         .brand { display: flex; align-items: center; gap: 1rem; }
         .logo-icon { width: 48px; height: 48px; background: linear-gradient(135deg, var(--accent), #0099cc); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; box-shadow: 0 4px 20px var(--accent-glow); }
         .logo-text { font-size: 1.75rem; font-weight: 800; background: linear-gradient(135deg, var(--text), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
@@ -32,8 +32,8 @@ Official Version 2.0005 - Production Release
         .status-pill { display: flex; align-items: center; gap: 0.5rem; background: rgba(46, 213, 115, 0.1); color: var(--success); padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600; border: 1px solid rgba(46, 213, 115, 0.3); }
         .status-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-        .container { flex: 1; max-width: 1400px; margin: 0 auto; width: 100%; padding: 2rem; display: flex; flex-direction: column; gap: 2rem; }
-        .upload-card { background: var(--bg-card); border: 2px dashed var(--border); border-radius: 24px; padding: 4rem 2rem; text-align: center; transition: all 0.3s ease; cursor: pointer; position: relative; }
+        .container { flex: 1; max-width: 1400px; margin: 0 auto; width: 100%; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; overflow-y: auto; overflow-x: hidden; }
+        .upload-card { background: var(--bg-card); border: 2px dashed var(--border); border-radius: 20px; padding: 2rem 1.5rem; } text-align: center; transition: all 0.3s ease; cursor: pointer; position: relative; }
         .upload-card:hover, .upload-card.dragover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
         .upload-card.hidden, .demo-video-card.hidden { display: none; }
         .upload-icon { width: 100px; height: 100px; background: var(--bg-panel); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 3rem; margin: 0 auto 1.5rem; border: 2px solid var(--border); transition: all 0.3s; }
@@ -48,13 +48,13 @@ Official Version 2.0005 - Production Release
         .editor.active { display: flex; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         .video-stage { background: #000; border-radius: 16px; overflow: hidden; position: relative; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
-        .video-container { position: relative; aspect-ratio: 16/9; background: linear-gradient(135deg, #1a1a2e 0%, #0a0a0f 100%); }
+        .video-container { position: relative; aspect-ratio: 16/9; max-height: 35vh; background: linear-gradient(135deg, #1a1a2e 0%, #0a0a0f 100%); }
         video { width: 100%; height: 100%; object-fit: contain; display: block; }
         .video-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
         .play-button { width: 100px; height: 100px; background: rgba(0,0,0,0.7); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; cursor: pointer; pointer-events: auto; transition: all 0.3s; backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.1); opacity: 0; transform: scale(0.8); }
         .video-stage:hover .play-button, .play-button.visible { opacity: 1; transform: scale(1); }
         .play-button:hover { background: var(--accent); color: #000; transform: scale(1.1); }
-        .timeline-card { background: var(--bg-card); border-radius: 20px; padding: 2rem; border: 1px solid var(--border); }
+        .timeline-card { background: var(--bg-card); border-radius: 16px; padding: 1rem; border: 1px solid var(--border); }
         .timeline-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
         .time-markers { display: flex; gap: 1rem; align-items: center; }
         .time-box { background: var(--bg-panel); padding: 0.75rem 1.25rem; border-radius: 12px; border: 1px solid var(--border); min-width: 100px; text-align: center; }
@@ -65,7 +65,7 @@ Official Version 2.0005 - Production Release
         .trim-duration { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
         .trim-label { font-size: 0.85rem; color: var(--text-dim); }
         .clipcut-container { position: relative; margin: 1rem 0; }
-        .timeline-track-bg { height: 100px; background: var(--bg-panel); border-radius: 12px; position: relative; overflow: hidden; border: 1px solid var(--border); }
+        .timeline-track-bg { height: 70px; background: var(--bg-panel); border-radius: 12px; position: relative; overflow: hidden; border: 1px solid var(--border); }
         .waveform { position: absolute; top: 0; left: 0; right: 0; bottom: 0; opacity: 0.2; display: flex; align-items: center; justify-content: space-around; padding: 0 2rem; pointer-events: none; }
         .wave-bar { width: 3px; background: var(--accent); border-radius: 2px; animation: wave 1s ease-in-out infinite; }
         @keyframes wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
@@ -89,17 +89,17 @@ Official Version 2.0005 - Production Release
         .playhead::before { content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%); border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 10px solid var(--text); }
         .playhead::after { content: ''; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 10px solid var(--text); }
         .time-ruler { display: flex; justify-content: space-between; padding: 0.5rem 1rem; font-size: 0.75rem; color: var(--text-dim); font-family: monospace; }
-        .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
-        .btn { background: var(--bg-panel); border: 1px solid var(--border); color: var(--text); padding: 1rem; border-radius: 12px; cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+        .controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 0.5rem; margin-top: 0.75rem; }
+        .btn { background: var(--bg-panel); border: 1px solid var(--border); color: var(--text); padding: 0.6rem; border-radius: 10px; font-size: 0.85rem; } cursor: pointer; font-size: 0.95rem; font-weight: 600; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
         .btn:hover { background: rgba(255,255,255,0.05); transform: translateY(-2px); }
         .btn.primary { background: var(--accent); color: #000; border-color: var(--accent); }
         .btn.primary:hover { background: #00b8e6; box-shadow: 0 4px 20px var(--accent-glow); }
         .btn.danger { background: rgba(255, 71, 87, 0.1); color: var(--danger); border-color: rgba(255, 71, 87, 0.3); }
         .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
-        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-        .info-card { background: var(--bg-card); border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border); }
+        .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
+        .info-card { background: var(--bg-card); border-radius: 12px; padding: 1rem; border: 1px solid var(--border); }
         .info-title { font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
-        .info-value { font-size: 1.5rem; font-weight: 700; font-family: monospace; }
+        .info-value { font-size: 1.1rem; font-weight: 700; font-family: monospace; }
         .info-value.accent { color: var(--accent); }
         .info-value.dim { color: var(--text-dim); }
         .export-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 2rem; z-index: 1000; backdrop-filter: blur(20px); }
@@ -125,7 +125,7 @@ Official Version 2.0005 - Production Release
         .kofi-icon { font-size: 1rem; }
         .kofi-text { display: inline; }
         @media (max-width: 768px) { .kofi-text { display: none; } .kofi-btn { padding: 0.5rem; } }
-                .demo-video-card { background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-panel) 100%); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; animation: fadeIn 0.5s ease; }
+                .demo-video-card { background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-panel) 100%); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; animation: fadeIn 0.5s ease; }
         .demo-header { display: flex; align-items: center; gap: 1rem; }
         .demo-icon { font-size: 2rem; }
         .demo-text h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.25rem; }
@@ -135,7 +135,12 @@ Official Version 2.0005 - Production Release
         .demo-play { font-size: 0.95rem; }
         .demo-yt { font-size: 0.75rem; opacity: 0.8; background: rgba(255,255,255,0.2); padding: 0.2rem 0.5rem; border-radius: 4px; }
         @media (max-width: 768px) { .demo-video-card { flex-direction: column; text-align: center; } .demo-header { flex-direction: column; } }
-        @media (max-width: 768px) { .container { padding: 1rem; } .logo-text { font-size: 1.25rem; } .timeline-card { padding: 1rem; } .controls-grid { grid-template-columns: repeat(2, 1fr); } .header-controls { flex-wrap: wrap; justify-content: flex-end; } }
+                .share-btn { background: linear-gradient(135deg, #25d366, #128c7e); color: #fff; }
+        .share-btn:hover { background: linear-gradient(135deg, #128c7e, #075e54); }
+        .save-quest-btn { background: linear-gradient(135deg, #1c1c1c, #2d2d2d); color: #fff; border-color: #444; }
+        .save-quest-btn:hover { background: linear-gradient(135deg, #2d2d2d, #3d3d3d); }
+        @media (max-width: 768px) { .info-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .container { padding: 0.5rem; } .logo-text { font-size: 1.25rem; } .timeline-card { padding: 1rem; } .controls-grid { grid-template-columns: repeat(2, 1fr); } .header-controls { flex-wrap: wrap; justify-content: flex-end; } }
         @media (hover: none) and (pointer: coarse) { .trim-handle { width: 44px; } .trim-handle:hover { width: 48px; } .btn { min-height: 56px; } }
     </style>
 <base target="_blank">
@@ -146,7 +151,7 @@ Official Version 2.0005 - Production Release
         <div class="brand">
             <div class="logo-icon">✂️</div>
             <div>
-                <div class="logo-text">SlicerVR<span class="version-badge">2.0005</span></div>
+                <div class="logo-text">SlicerVR<span class="version-badge">2.0007</span></div>
                 <div class="tagline">ClipCut Timeline Editor</div>
             </div>
         </div>
@@ -261,11 +266,13 @@ Official Version 2.0005 - Production Release
 
                 <div class="controls-grid">
                     <button class="btn" id="btnPlay"><span>▶</span> Play</button>
-                    <button class="btn" id="btnToStart"><span>⏮</span> To Start</button>
-                    <button class="btn" id="btnToEnd"><span>⏭</span> To End</button>
+                    <button class="btn" id="btnToStart"><span>⏮</span> Start</button>
+                    <button class="btn" id="btnToEnd"><span>⏭</span> End</button>
                     <button class="btn danger" id="btnReset"><span>↺</span> Reset</button>
-                    <button class="btn primary" id="btnExport"><span>✂️</span> Export Clip</button>
-                    <button class="btn" id="btnNew"><span>📁</span> New File</button>
+                    <button class="btn primary" id="btnExport"><span>✂️</span> Export</button>
+                    <button class="btn share-btn" id="btnShare" style="display: none;"><span>📤</span> Share</button>
+                    <button class="btn save-quest-btn" id="btnSaveQuest" style="display: none;"><span>💾</span> Save to Quest</button>
+                    <button class="btn" id="btnNew"><span>📁</span> New</button>
                 </div>
             </div>
 
@@ -427,6 +434,11 @@ Official Version 2.0005 - Production Release
 
                 // Download
                 const blob = new Blob([gif.bytes()], { type: 'image/gif' });
+
+                // Store for sharing
+                state.lastExportBlob = blob;
+                state.lastExportFormat = 'gif';
+
                 const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -551,6 +563,11 @@ Official Version 2.0005 - Production Release
                     recorder.onstop = () => {
                         if (signal.aborted) { reject(new Error('Export aborted')); return; }
                         const blob = new Blob(chunks, { type: selectedMime });
+
+                        // Store for sharing
+                        state.lastExportBlob = blob;
+                        state.lastExportFormat = ext;
+
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
@@ -844,8 +861,12 @@ Official Version 2.0005 - Production Release
             state.videoUrl = null;
             state.trimLeft = 0;
             state.trimRight = 0;
+            state.lastExportBlob = null;
+            state.lastExportFormat = null;
             uploadCard.classList.remove('hidden');
             editor.classList.remove('active');
+            document.getElementById('btnShare').style.display = 'none';
+            document.getElementById('btnSaveQuest').style.display = 'none';
             fileInput.value = '';
         });
 
@@ -911,6 +932,86 @@ Official Version 2.0005 - Production Release
             document.getElementById('exportModal').classList.remove('active');
             document.getElementById('progressBar').style.width = '0%';
             video.pause();
+
+            // Show share buttons if export completed successfully
+            if (state.lastExportBlob) {
+                setupShareButtons();
+            }
+        }
+
+        function setupShareButtons() {
+            const shareBtn = document.getElementById('btnShare');
+            const saveQuestBtn = document.getElementById('btnSaveQuest');
+
+            // Check if Web Share API is supported
+            if (navigator.canShare && navigator.canShare({ files: [new File([""], "test")] })) {
+                shareBtn.style.display = 'flex';
+            }
+
+            // Always show save option for Quest/file system access
+            if ('showSaveFilePicker' in window || /Quest|Oculus/i.test(navigator.userAgent)) {
+                saveQuestBtn.style.display = 'flex';
+            }
+
+            shareBtn.onclick = async () => {
+                if (!state.lastExportBlob) return;
+
+                const file = new File([state.lastExportBlob], `SlicerVR_Export.${state.lastExportFormat || 'webm'}`, { 
+                    type: state.lastExportBlob.type 
+                });
+
+                try {
+                    if (navigator.canShare({ files: [file] })) {
+                        await navigator.share({
+                            files: [file],
+                            title: 'SlicerVR Export',
+                            text: 'Check out this video clip I made with SlicerVR!'
+                        });
+                        showToast('Shared successfully!', 'success');
+                    }
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        showToast('Share failed: ' + err.message, 'error');
+                    }
+                }
+            };
+
+            saveQuestBtn.onclick = async () => {
+                if (!state.lastExportBlob) return;
+
+                try {
+                    // Try File System Access API first (for Quest and modern browsers)
+                    if ('showSaveFilePicker' in window) {
+                        const opts = {
+                            suggestedName: `SlicerVR_Export.${state.lastExportFormat || 'webm'}`,
+                            types: [{
+                                description: 'Video file',
+                                accept: { [state.lastExportBlob.type]: [`.${state.lastExportFormat || 'webm'}`] }
+                            }]
+                        };
+                        const handle = await window.showSaveFilePicker(opts);
+                        const writable = await handle.createWritable();
+                        await writable.write(state.lastExportBlob);
+                        await writable.close();
+                        showToast('Saved to device!', 'success');
+                    } else {
+                        // Fallback: trigger download again
+                        const url = URL.createObjectURL(state.lastExportBlob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `SlicerVR_Export.${state.lastExportFormat || 'webm'}`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        showToast('Downloaded! Check your Downloads folder.', 'success');
+                    }
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        showToast('Save failed: ' + err.message, 'error');
+                    }
+                }
+            };
         }
 
         document.addEventListener('keydown', (e) => {

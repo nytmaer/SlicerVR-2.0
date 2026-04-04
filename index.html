@@ -3,39 +3,47 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SlicerVR Universal</title>
+<title>SlicerVR 2.0095</title>
 
 <base target="_blank">
 
 <style>
-body {
+* {
     margin:0;
+    padding:0;
+    box-sizing:border-box;
+    -webkit-user-select:none;
+    user-select:none;
+}
+
+body {
     font-family:sans-serif;
     background:#0a0a0f;
     color:white;
 }
 
-/* Upload Card */
+/* Upload */
 .upload-card {
     position:relative;
-    margin:40px;
+    margin:30px;
     padding:40px;
     border:2px dashed #333;
     border-radius:16px;
     text-align:center;
     cursor:pointer;
+    touch-action:auto;
 }
 
 .upload-card:hover {
     border-color:#00d4ff;
 }
 
-/* Invisible Input */
 #fileInput {
     position:absolute;
     inset:0;
     opacity:0;
     cursor:pointer;
+    pointer-events:auto;
 }
 
 /* Video */
@@ -49,10 +57,10 @@ video {
 /* Timeline */
 .timeline {
     margin:20px;
-    height:40px;
+    height:50px;
     background:#222;
+    border-radius:10px;
     position:relative;
-    border-radius:8px;
 }
 
 .selection {
@@ -64,14 +72,14 @@ video {
 
 .handle {
     position:absolute;
-    width:10px;
+    width:12px;
     top:0;
     bottom:0;
     background:#00d4ff;
     cursor:ew-resize;
 }
 
-/* Buttons */
+/* Controls */
 .controls {
     display:flex;
     gap:10px;
@@ -79,40 +87,38 @@ video {
 }
 
 button {
-    padding:10px;
+    padding:12px;
     border:none;
-    border-radius:8px;
+    border-radius:10px;
     background:#00d4ff;
     cursor:pointer;
+    font-weight:bold;
 }
 
 button:disabled {
-    opacity:0.5;
+    opacity:0.4;
 }
 </style>
 </head>
 
 <body>
 
-<!-- Upload -->
-<label class="upload-card" id="uploadCard">
+<label class="upload-card">
     <input type="file" id="fileInput" accept="video/*">
     <h2>📁 Select or Drop Video</h2>
+    <p>Works on Desktop, Mobile, and Quest</p>
 </label>
 
-<!-- Video -->
-<video id="video" controls></video>
+<video id="video" controls playsinline></video>
 
-<!-- Timeline -->
 <div class="timeline" id="timeline">
     <div class="selection" id="selection"></div>
     <div class="handle" id="leftHandle"></div>
     <div class="handle" id="rightHandle"></div>
 </div>
 
-<!-- Controls -->
 <div class="controls">
-    <button id="exportBtn">Export</button>
+    <button id="exportBtn">Export Clip</button>
 </div>
 
 <script>
@@ -130,9 +136,9 @@ let state = {
     dragging:null
 };
 
-/* =====================
-   FILE LOAD
-===================== */
+/* =========================
+   FILE LOAD (WORKS EVERYWHERE)
+========================= */
 fileInput.addEventListener('change', e=>{
     const file = e.target.files[0];
     if(!file) return;
@@ -141,16 +147,16 @@ fileInput.addEventListener('change', e=>{
     video.src = url;
 });
 
-/* =====================
+/* =========================
    VIDEO META
-===================== */
+========================= */
 video.addEventListener('loadedmetadata', ()=>{
     state.duration = video.duration;
 });
 
-/* =====================
-   TIMELINE
-===================== */
+/* =========================
+   TIMELINE LOGIC
+========================= */
 function updateUI(){
     selection.style.left = state.left + '%';
     selection.style.right = (100 - state.right) + '%';
@@ -159,17 +165,17 @@ function updateUI(){
     rightHandle.style.left = state.right + '%';
 }
 
-function getTimeFromPct(p){
+function pctToTime(p){
     return (p/100)*state.duration;
 }
 
 function snap(t){
-    return Math.round(t/0.5)*0.5;
+    return Math.round(t / 0.5) * 0.5;
 }
 
-/* =====================
-   DRAG
-===================== */
+/* =========================
+   DRAG SYSTEM
+========================= */
 function startDrag(type){
     state.dragging = type;
 }
@@ -184,7 +190,7 @@ function moveDrag(e){
     const rect = timeline.getBoundingClientRect();
     const pct = ((e.clientX - rect.left)/rect.width)*100;
 
-    const time = snap(getTimeFromPct(pct));
+    const time = snap(pctToTime(pct));
     const snappedPct = (time/state.duration)*100;
 
     if(state.dragging === 'left'){
@@ -204,15 +210,15 @@ rightHandle.addEventListener('mousedown', ()=>startDrag('right'));
 window.addEventListener('mouseup', stopDrag);
 window.addEventListener('mousemove', moveDrag);
 
-/* =====================
-   DRAG DROP (DESKTOP)
-===================== */
+/* =========================
+   DRAG DROP (DESKTOP ONLY)
+========================= */
 if(!('ontouchstart' in window)){
-    uploadCard.addEventListener('dragover', e=>{
+    document.querySelector('.upload-card').addEventListener('dragover', e=>{
         e.preventDefault();
     });
 
-    uploadCard.addEventListener('drop', e=>{
+    document.querySelector('.upload-card').addEventListener('drop', e=>{
         e.preventDefault();
         const file = e.dataTransfer.files[0];
         if(file){
@@ -221,27 +227,29 @@ if(!('ontouchstart' in window)){
     });
 }
 
-/* =====================
+/* =========================
    EXPORT (QUEST SAFE)
-===================== */
+========================= */
 document.getElementById('exportBtn').onclick = async ()=>{
+
     if(!video.duration) return;
 
-    const start = getTimeFromPct(state.left);
-    const end = getTimeFromPct(state.right);
+    const start = pctToTime(state.left);
+    const end = pctToTime(state.right);
 
     const canvas = document.createElement('canvas');
     canvas.width = 640;
     canvas.height = 360;
+
     const ctx = canvas.getContext('2d');
 
     const stream = canvas.captureStream(30);
-    const recorder = new MediaRecorder(stream);
+    const recorder = new MediaRecorder(stream, { mimeType:'video/webm' });
 
     const chunks = [];
 
     recorder.ondataavailable = e=>{
-        if(e.data.size>0) chunks.push(e.data);
+        if(e.data.size > 0) chunks.push(e.data);
     };
 
     recorder.onstop = ()=>{
@@ -250,15 +258,17 @@ document.getElementById('exportBtn').onclick = async ()=>{
 
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'clip.webm';
+        a.download = `SlicerVR_${Date.now()}.webm`;
         a.click();
+
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
     };
 
     recorder.start();
 
     video.currentTime = start;
 
-    await new Promise(r=>video.onseeked=r);
+    await new Promise(r=>video.onseeked = r);
 
     video.play();
 

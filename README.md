@@ -245,4 +245,4 @@ Built to plug into creator pipelines, VR workflows, and automated publishing sys
 ## 📄 License
 
 MIT License
-© 2026 Master Nytmaer / Brackuro Studios LLC
+© 2026 Nytmaer / Brackuro Studios LLC

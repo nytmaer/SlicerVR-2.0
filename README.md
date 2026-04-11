@@ -1,6 +1,56 @@
-# SlicerVR 2.0010 — ClipCut Timeline Editor
+# SlicerVR 2.0007
+**ClipCut Timeline Editor** — Trim and export videos directly in your browser. No installs, no uploads, no accounts.
 
-![SlicerVR Preview](./preview.png)
+Built for Meta Quest 3, works everywhere.
+
+---
+
+## Quick Start
+
+1. **Drop a video** onto the upload area (MP4, WebM, or MOV)
+2. **Drag the handles** on the timeline to set your in and out points
+3. **Pick a format** — WebM (fastest), MP4, or GIF
+4. **Hit Export** — your clip downloads automatically
+
+---
+
+## Controls
+
+| Button | Action |
+|--------|--------|
+| ▶ Play | Play / pause |
+| ⏮ Start | Jump to trim start |
+| ⏭ End | Jump to trim end |
+| ↺ Reset | Clear trim points |
+| ✂️ Export | Export your clip |
+
+**Keyboard:** `Space` to play/pause · `[ ]` to jump to start/end · `← →` to step through frame by frame
+
+---
+
+## Export Formats
+
+- **WebM** — fastest, best for web sharing
+- **MP4** — best device compatibility (requires MediaBunny to load)
+- **GIF** — looping animation, max 10 seconds
+
+---
+
+## Notes
+
+- Everything runs locally in your browser — your video never leaves your device
+- After exporting, **Share** and **Save** buttons appear for sending directly from Quest or mobile
+- Requires HTTPS when hosted remotely (Quest browser requirement)
+
+---
+
+## License
+
+MIT License — Copyright © 2026 Brackuro Studios LLC
+
+☕ [Support on Ko-fi](https://ko-fi.com/nytmaer) · 📺 [Watch the demo](https://youtu.be/xiR531CFzqo)# SlicerVR 2.0010 — ClipCut Timeline Editor
+
+![SlicerVR Preview](./screenshot.png)
 
 **Fast, browser-based video trimming with zero uploads. Built for creators, devs, and VR workflows.**
 
